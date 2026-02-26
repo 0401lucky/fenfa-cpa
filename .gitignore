@@ -1,0 +1,25 @@
+# Binaries
+cpa-distribution
+cpa-distribution.exe
+
+# Data
+data/
+
+# Environment
+.env
+
+# Frontend dependencies
+web/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+web/dist/

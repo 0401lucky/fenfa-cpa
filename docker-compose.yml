@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  cpa:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - SERVER_URL=http://localhost:3000
+      - SESSION_SECRET=dev-session-secret
+      - JWT_SECRET=dev-jwt-secret
+      - GIN_MODE=debug
+      - SQL_DSN=
+      - CPA_UPSTREAM_URL=${CPA_UPSTREAM_URL}
+      - CPA_UPSTREAM_KEY=${CPA_UPSTREAM_KEY}
+      - LINUXDO_CLIENT_ID=${LINUXDO_CLIENT_ID}
+      - LINUXDO_CLIENT_SECRET=${LINUXDO_CLIENT_SECRET}
+    volumes:
+      - cpa-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  cpa-data:

@@ -1,0 +1,5 @@
+{
+  "build_command": "go build -o cpa-distribution .",
+  "start_command": "./cpa-distribution",
+  "build_type": "dockerfile"
+}
