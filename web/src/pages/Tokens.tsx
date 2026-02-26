@@ -1,77 +1,102 @@
-import { useEffect, useState } from 'react'
-import { Table, Button, Modal, Form, Input, InputNumber, Space, Tag, Typography, message, Popconfirm, Switch, Select } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import { Table, Button, Modal, Form, Input, InputNumber, Space, Tag, Typography, message, Popconfirm, Select } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import { PlusOutlined, CopyOutlined, ReloadOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
-import { getTokens, createToken, updateToken, deleteToken, resetToken } from '../api'
+import { createToken, deleteToken, getErrorMessage, getTokens, resetToken, updateToken, type TokenInfo } from '../api'
 import dayjs from 'dayjs'
 
 const { Title, Text, Paragraph } = Typography
 
+interface CreateTokenFormValues {
+  name: string
+  quota_total?: number
+  rate_limit_rpm?: number
+  allowed_models?: string
+  allowed_ips?: string
+}
+
+interface EditTokenFormValues {
+  name?: string
+  status?: number
+  quota_total?: number
+  rate_limit_rpm?: number
+  allowed_models?: string
+  allowed_ips?: string
+}
+
 export default function Tokens() {
-  const [tokens, setTokens] = useState<any[]>([])
+  const [tokens, setTokens] = useState<TokenInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [newKeyModalOpen, setNewKeyModalOpen] = useState(false)
   const [newKey, setNewKey] = useState('')
-  const [editingToken, setEditingToken] = useState<any>(null)
+  const [editingToken, setEditingToken] = useState<TokenInfo | null>(null)
   const [createForm] = Form.useForm()
   const [editForm] = Form.useForm()
 
-  const fetchTokens = () => {
-    setLoading(true)
-    getTokens().then((res: any) => {
+  const fetchTokens = useCallback((showLoading = true) => {
+    if (showLoading) {
+      setLoading(true)
+    }
+    getTokens().then((res) => {
       setTokens(res.data || [])
       setLoading(false)
     }).catch(() => setLoading(false))
-  }
+  }, [])
 
-  useEffect(() => { fetchTokens() }, [])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchTokens(false)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchTokens])
 
-  const handleCreate = async (values: any) => {
+  const handleCreate = async (values: CreateTokenFormValues) => {
     try {
-      const res: any = await createToken(values)
+      const res = await createToken(values)
       setNewKey(res.data.key)
       setNewKeyModalOpen(true)
       setCreateModalOpen(false)
       createForm.resetFields()
-      fetchTokens()
+      void fetchTokens()
       message.success('密钥创建成功')
-    } catch (err: any) {
-      message.error(err?.message || '创建失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '创建失败'))
     }
   }
 
-  const handleUpdate = async (values: any) => {
+  const handleUpdate = async (values: EditTokenFormValues) => {
     if (!editingToken) return
     try {
       await updateToken(editingToken.id, values)
       setEditModalOpen(false)
-      fetchTokens()
+      void fetchTokens()
       message.success('更新成功')
-    } catch (err: any) {
-      message.error(err?.message || '更新失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '更新失败'))
     }
   }
 
   const handleDelete = async (id: number) => {
     try {
       await deleteToken(id)
-      fetchTokens()
+      void fetchTokens()
       message.success('已删除')
-    } catch (err: any) {
-      message.error(err?.message || '删除失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '删除失败'))
     }
   }
 
   const handleReset = async (id: number) => {
     try {
-      const res: any = await resetToken(id)
+      const res = await resetToken(id)
       setNewKey(res.data.key)
       setNewKeyModalOpen(true)
-      fetchTokens()
+      void fetchTokens()
       message.success('密钥已重置')
-    } catch (err: any) {
-      message.error(err?.message || '重置失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '重置失败'))
     }
   }
 
@@ -80,7 +105,7 @@ export default function Tokens() {
     message.success('已复制到剪贴板')
   }
 
-  const columns = [
+  const columns: ColumnsType<TokenInfo> = [
     { title: '名称', dataIndex: 'name', key: 'name' },
     {
       title: '密钥前缀', dataIndex: 'key_prefix', key: 'key_prefix',
@@ -92,7 +117,7 @@ export default function Tokens() {
     },
     {
       title: '配额', key: 'quota',
-      render: (_: any, r: any) => r.quota_total === -1 ? '跟随用户' : `${r.quota_used} / ${r.quota_total}`,
+      render: (_, r) => r.quota_total === -1 ? '跟随用户' : `${r.quota_used} / ${r.quota_total}`,
     },
     {
       title: 'RPM', dataIndex: 'rate_limit_rpm', key: 'rpm',
@@ -110,7 +135,7 @@ export default function Tokens() {
     },
     {
       title: '操作', key: 'action',
-      render: (_: any, record: any) => (
+      render: (_, record) => (
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => {
             setEditingToken(record)

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Card, Form, Input, InputNumber, Button, Typography, message, Divider, Space } from 'antd'
-import { getSettings, updateSettings } from '../api'
+import { Card, Form, Input, Button, Typography, message, Divider } from 'antd'
+import { getErrorMessage, getSettings, updateSettings, type SettingsMap } from '../api'
 
-const { Title, Text } = Typography
+const { Title } = Typography
 
 export default function Settings() {
   const [loading, setLoading] = useState(true)
@@ -10,17 +10,17 @@ export default function Settings() {
   const [form] = Form.useForm()
 
   useEffect(() => {
-    getSettings().then((res: any) => {
+    getSettings().then((res) => {
       form.setFieldsValue(res.data || {})
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [form])
 
-  const handleSave = async (values: any) => {
+  const handleSave = async (values: Record<string, unknown>) => {
     setSaving(true)
     try {
       // Convert numbers to strings for KV store
-      const data: Record<string, string> = {}
+      const data: SettingsMap = {}
       for (const [k, v] of Object.entries(values)) {
         if (v !== undefined && v !== null && v !== '') {
           data[k] = String(v)
@@ -28,8 +28,8 @@ export default function Settings() {
       }
       await updateSettings(data)
       message.success('设置已保存')
-    } catch (err: any) {
-      message.error(err?.message || '保存失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '保存失败'))
     }
     setSaving(false)
   }
@@ -40,7 +40,7 @@ export default function Settings() {
 
       <Card loading={loading}>
         <Form form={form} layout="vertical" onFinish={handleSave} style={{ maxWidth: 600 }}>
-          <Divider orientation="left">上游配置</Divider>
+          <Divider>上游配置</Divider>
           <Form.Item name="cpa_upstream_url" label="CPA 上游地址">
             <Input placeholder="https://xxx.zeabur.app" />
           </Form.Item>
@@ -48,7 +48,7 @@ export default function Settings() {
             <Input.Password placeholder="sk-xxx" />
           </Form.Item>
 
-          <Divider orientation="left">OAuth 配置</Divider>
+          <Divider>OAuth 配置</Divider>
           <Form.Item name="linuxdo_client_id" label="LinuxDO Client ID">
             <Input />
           </Form.Item>
@@ -56,7 +56,7 @@ export default function Settings() {
             <Input.Password />
           </Form.Item>
 
-          <Divider orientation="left">站点配置</Divider>
+          <Divider>站点配置</Divider>
           <Form.Item name="site_name" label="站点名称">
             <Input placeholder="CPA 分发系统" />
           </Form.Item>

@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Card, Col, Row, Statistic, Typography, Table, Spin } from 'antd'
 import { ApiOutlined, ThunderboltOutlined, ClockCircleOutlined, KeyOutlined } from '@ant-design/icons'
-import { getDashboard } from '../api'
+import { getDashboard, type DashboardData } from '../api'
 import { useUserStore } from '../store/userStore'
 
 const { Title } = Typography
 
 export default function Dashboard() {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const { user } = useUserStore()
   const isAdmin = user && user.role >= 10
 
   useEffect(() => {
-    getDashboard().then((res: any) => {
+    getDashboard().then((res) => {
       setData(res.data)
       setLoading(false)
     }).catch(() => setLoading(false))

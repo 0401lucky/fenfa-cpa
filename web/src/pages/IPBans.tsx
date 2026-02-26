@@ -1,33 +1,47 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, DatePicker, Typography, message, Popconfirm, Tag } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
-import { getIPBans, createIPBan, deleteIPBan } from '../api'
-import dayjs from 'dayjs'
+import { createIPBan, deleteIPBan, getErrorMessage, getIPBans, type IPBanInfo } from '../api'
+import dayjs, { type Dayjs } from 'dayjs'
 
 const { Title } = Typography
 
+interface CreateIPBanFormValues {
+  ip: string
+  reason?: string
+  expires_at?: Dayjs
+}
+
 export default function IPBans() {
-  const [bans, setBans] = useState<any[]>([])
+  const [bans, setBans] = useState<IPBanInfo[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [form] = Form.useForm()
 
-  const fetchBans = () => {
-    setLoading(true)
-    getIPBans({ page, page_size: 20 }).then((res: any) => {
+  const fetchBans = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true)
+    }
+    getIPBans({ page, page_size: 20 }).then((res) => {
       setBans(res.data?.list || [])
       setTotal(res.data?.total || 0)
       setLoading(false)
     }).catch(() => setLoading(false))
-  }
+  }, [page])
 
-  useEffect(() => { fetchBans() }, [page])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchBans()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchBans])
 
-  const handleCreate = async (values: any) => {
+  const handleCreate = async (values: CreateIPBanFormValues) => {
     try {
-      const data: any = {
+      const data: Record<string, string | number> = {
         ip: values.ip,
         reason: values.reason || '',
       }
@@ -37,24 +51,24 @@ export default function IPBans() {
       await createIPBan(data)
       setCreateModalOpen(false)
       form.resetFields()
-      fetchBans()
+      void fetchBans(true)
       message.success('已添加封禁')
-    } catch (err: any) {
-      message.error(err?.message || '添加失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '添加失败'))
     }
   }
 
   const handleDelete = async (id: number) => {
     try {
       await deleteIPBan(id)
-      fetchBans()
+      void fetchBans(true)
       message.success('已解除封禁')
-    } catch (err: any) {
-      message.error(err?.message || '操作失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '操作失败'))
     }
   }
 
-  const columns = [
+  const columns: ColumnsType<IPBanInfo> = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: 'IP 地址', dataIndex: 'ip', key: 'ip' },
     { title: '原因', dataIndex: 'reason', key: 'reason' },
@@ -72,7 +86,7 @@ export default function IPBans() {
     },
     {
       title: '操作', key: 'action',
-      render: (_: any, record: any) => (
+      render: (_, record) => (
         <Popconfirm title="确认解除封禁？" onConfirm={() => handleDelete(record.id)}>
           <Button size="small" danger icon={<DeleteOutlined />}>解除</Button>
         </Popconfirm>
@@ -98,7 +112,10 @@ export default function IPBans() {
           current: page,
           total,
           pageSize: 20,
-          onChange: setPage,
+          onChange: (nextPage) => {
+            setLoading(true)
+            setPage(nextPage)
+          },
           showTotal: (t) => `共 ${t} 条`,
         }}
       />

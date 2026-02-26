@@ -1,30 +1,109 @@
 package utils
 
 import (
+	"cpa-distribution/common"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
 
+var (
+	trustedProxies     []*net.IPNet
+	trustedProxiesOnce sync.Once
+)
+
+func initTrustedProxies() {
+	for _, entry := range strings.Split(common.TrustedProxies, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		if strings.Contains(entry, "/") {
+			if _, network, err := net.ParseCIDR(entry); err == nil {
+				trustedProxies = append(trustedProxies, network)
+			}
+			continue
+		}
+
+		ip := net.ParseIP(entry)
+		if ip == nil {
+			continue
+		}
+		maskBits := 32
+		if ip.To4() == nil {
+			maskBits = 128
+		}
+		trustedProxies = append(trustedProxies, &net.IPNet{
+			IP:   ip,
+			Mask: net.CIDRMask(maskBits, maskBits),
+		})
+	}
+}
+
+func parseRemoteIP(remoteAddr string) net.IP {
+	remoteAddr = strings.TrimSpace(remoteAddr)
+	if remoteAddr == "" {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil {
+		return net.ParseIP(host)
+	}
+	return net.ParseIP(remoteAddr)
+}
+
+func isTrustedProxy(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	for _, network := range trustedProxies {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func GetClientIP(c *gin.Context) string {
+	trustedProxiesOnce.Do(initTrustedProxies)
+
+	remoteIP := parseRemoteIP(c.Request.RemoteAddr)
+	if remoteIP == nil {
+		return c.ClientIP()
+	}
+	if !isTrustedProxy(remoteIP) {
+		return remoteIP.String()
+	}
+
 	// CF-Connecting-IP (Cloudflare)
 	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
-		return strings.TrimSpace(ip)
+		ip = strings.TrimSpace(ip)
+		if parsed := net.ParseIP(ip); parsed != nil {
+			return parsed.String()
+		}
 	}
 	// X-Real-IP
 	if ip := c.GetHeader("X-Real-IP"); ip != "" {
-		return strings.TrimSpace(ip)
-	}
-	// X-Forwarded-For (first IP)
-	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
+		ip = strings.TrimSpace(ip)
+		if parsed := net.ParseIP(ip); parsed != nil {
+			return parsed.String()
 		}
 	}
-	// Fallback
-	return c.ClientIP()
+	// X-Forwarded-For（取首个合法 IP）
+	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		for _, part := range parts {
+			ip := strings.TrimSpace(part)
+			if parsed := net.ParseIP(ip); parsed != nil {
+				return parsed.String()
+			}
+		}
+	}
+
+	return remoteIP.String()
 }
 
 func IsIPInCIDR(ip string, cidr string) bool {

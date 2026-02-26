@@ -1,30 +1,38 @@
-import { useEffect, useState } from 'react'
-import { Table, Card, Input, Select, Typography, Tag, Space } from 'antd'
-import { getLogs } from '../api'
+import { useCallback, useEffect, useState } from 'react'
+import { Table, Card, Input, Typography, Tag, Space } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import { getLogs, type RequestLogInfo } from '../api'
 import dayjs from 'dayjs'
 
 const { Title } = Typography
 
 export default function Logs() {
-  const [logs, setLogs] = useState<any[]>([])
+  const [logs, setLogs] = useState<RequestLogInfo[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [modelFilter, setModelFilter] = useState('')
 
-  const fetchLogs = () => {
-    setLoading(true)
-    getLogs({ page, page_size: pageSize, model: modelFilter || undefined }).then((res: any) => {
+  const fetchLogs = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true)
+    }
+    getLogs({ page, page_size: pageSize, model: modelFilter || undefined }).then((res) => {
       setLogs(res.data?.list || [])
       setTotal(res.data?.total || 0)
       setLoading(false)
     }).catch(() => setLoading(false))
-  }
+  }, [page, pageSize, modelFilter])
 
-  useEffect(() => { fetchLogs() }, [page, pageSize, modelFilter])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchLogs()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchLogs])
 
-  const columns = [
+  const columns: ColumnsType<RequestLogInfo> = [
     {
       title: '时间', dataIndex: 'created_at', key: 'created_at', width: 160,
       render: (v: string) => dayjs(v).format('MM-DD HH:mm:ss'),
@@ -76,7 +84,11 @@ export default function Logs() {
           total,
           showSizeChanger: true,
           showTotal: (t) => `共 ${t} 条`,
-          onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+          onChange: (p, ps) => {
+            setLoading(true)
+            setPage(p)
+            setPageSize(ps)
+          },
         }}
       />
     </div>

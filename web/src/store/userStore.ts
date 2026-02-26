@@ -1,22 +1,9 @@
 import { create } from 'zustand'
-import { getCurrentUser } from '../api'
-
-interface User {
-  id: number
-  username: string
-  display_name: string
-  avatar_url: string
-  role: number
-  status: number
-  quota_total: number
-  quota_used: number
-  trust_level: number
-  token_limit: number
-}
+import { getCurrentUser, type UserInfo } from '../api'
 
 interface UserState {
   token: string | null
-  user: User | null
+  user: UserInfo | null
   loading: boolean
   setToken: (token: string) => void
   fetchUser: () => Promise<void>
@@ -37,7 +24,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   fetchUser: async () => {
     set({ loading: true })
     try {
-      const res: any = await getCurrentUser()
+      const res = await getCurrentUser()
       set({ user: res.data, loading: false })
     } catch {
       set({ user: null, loading: false })

@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"cpa-distribution/common"
+	"cpa-distribution/common/utils"
 	"cpa-distribution/model"
 	"cpa-distribution/service"
 	"encoding/json"
@@ -192,7 +193,7 @@ func getRequestIP(c *gin.Context) string {
 	if ip, exists := c.Get("request_ip"); exists {
 		return ip.(string)
 	}
-	return c.ClientIP()
+	return utils.GetClientIP(c)
 }
 
 type UsageInfo struct {

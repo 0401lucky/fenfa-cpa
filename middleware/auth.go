@@ -3,6 +3,7 @@ package middleware
 import (
 	"cpa-distribution/common"
 	"cpa-distribution/model"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -18,14 +19,13 @@ type JWTClaims struct {
 
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenString := ""
 		auth := c.GetHeader("Authorization")
-		if strings.HasPrefix(auth, "Bearer ") {
-			tokenString = strings.TrimPrefix(auth, "Bearer ")
+		if !strings.HasPrefix(auth, "Bearer ") {
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "未登录"})
+			c.Abort()
+			return
 		}
-		if tokenString == "" {
-			tokenString = c.Query("token")
-		}
+		tokenString := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 		if tokenString == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "未登录"})
 			c.Abort()
@@ -34,6 +34,9 @@ func JWTAuth() gin.HandlerFunc {
 
 		claims := &JWTClaims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return []byte(common.JWTSecret), nil
 		})
 		if err != nil || !token.Valid {

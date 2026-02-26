@@ -16,6 +16,8 @@ var (
 	CPAUpstreamKey      = getEnv("CPA_UPSTREAM_KEY", "")
 	LinuxDOClientID     = getEnv("LINUXDO_CLIENT_ID", "")
 	LinuxDOClientSecret = getEnv("LINUXDO_CLIENT_SECRET", "")
+	CORSAllowOrigins    = getEnv("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+	TrustedProxies      = getEnv("TRUSTED_PROXIES", "")
 )
 
 func getEnv(key, defaultValue string) string {

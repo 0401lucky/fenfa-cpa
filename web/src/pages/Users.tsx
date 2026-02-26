@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Table, Tag, Button, Modal, Form, InputNumber, Select, Typography, message } from 'antd'
-import { getUsers, updateUser } from '../api'
+import type { ColumnsType } from 'antd/es/table'
+import { getErrorMessage, getUsers, updateUser, type UserInfo } from '../api'
 import dayjs from 'dayjs'
 
 const { Title } = Typography
@@ -12,26 +13,33 @@ const roleMap: Record<number, { label: string; color: string }> = {
 }
 
 export default function Users() {
-  const [users, setUsers] = useState<any[]>([])
+  const [users, setUsers] = useState<UserInfo[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingUser, setEditingUser] = useState<any>(null)
+  const [editingUser, setEditingUser] = useState<UserInfo | null>(null)
   const [form] = Form.useForm()
 
-  const fetchUsers = () => {
-    setLoading(true)
-    getUsers({ page, page_size: 20 }).then((res: any) => {
+  const fetchUsers = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true)
+    }
+    getUsers({ page, page_size: 20 }).then((res) => {
       setUsers(res.data?.list || [])
       setTotal(res.data?.total || 0)
       setLoading(false)
     }).catch(() => setLoading(false))
-  }
+  }, [page])
 
-  useEffect(() => { fetchUsers() }, [page])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchUsers()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchUsers])
 
-  const handleEdit = (record: any) => {
+  const handleEdit = (record: UserInfo) => {
     setEditingUser(record)
     form.setFieldsValue({
       role: record.role,
@@ -42,18 +50,21 @@ export default function Users() {
     setEditModalOpen(true)
   }
 
-  const handleUpdate = async (values: any) => {
+  const handleUpdate = async (values: Record<string, number>) => {
+    if (!editingUser) {
+      return
+    }
     try {
       await updateUser(editingUser.id, values)
       setEditModalOpen(false)
-      fetchUsers()
+      void fetchUsers(true)
       message.success('更新成功')
-    } catch (err: any) {
-      message.error(err?.message || '更新失败')
+    } catch (error) {
+      message.error(getErrorMessage(error, '更新失败'))
     }
   }
 
-  const columns = [
+  const columns: ColumnsType<UserInfo> = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: '用户名', dataIndex: 'username', key: 'username' },
     { title: '显示名', dataIndex: 'display_name', key: 'display_name' },
@@ -68,7 +79,7 @@ export default function Users() {
     { title: '信任等级', dataIndex: 'trust_level', key: 'trust_level', width: 80 },
     {
       title: '配额', key: 'quota',
-      render: (_: any, r: any) => `${r.quota_used} / ${r.quota_total === -1 ? '∞' : r.quota_total}`,
+      render: (_, r) => `${r.quota_used} / ${r.quota_total === -1 ? '∞' : r.quota_total}`,
     },
     { title: '密钥上限', dataIndex: 'token_limit', key: 'token_limit', width: 80 },
     {
@@ -78,7 +89,7 @@ export default function Users() {
     { title: '登录IP', dataIndex: 'last_login_ip', key: 'last_login_ip' },
     {
       title: '操作', key: 'action',
-      render: (_: any, record: any) => (
+      render: (_, record) => (
         <Button size="small" onClick={() => handleEdit(record)}>编辑</Button>
       ),
     },
@@ -97,7 +108,10 @@ export default function Users() {
           current: page,
           total,
           pageSize: 20,
-          onChange: setPage,
+          onChange: (nextPage) => {
+            setLoading(true)
+            setPage(nextPage)
+          },
           showTotal: (t) => `共 ${t} 条`,
         }}
       />

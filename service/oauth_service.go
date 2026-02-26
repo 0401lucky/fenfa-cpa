@@ -1,33 +1,27 @@
 package service
 
 import (
+	"context"
 	"cpa-distribution/common"
 	"cpa-distribution/middleware"
 	"cpa-distribution/model"
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
+	"gorm.io/gorm"
 )
 
 var LinuxDOOAuthConfig *oauth2.Config
 
 func InitOAuth() {
-	LinuxDOOAuthConfig = &oauth2.Config{
-		ClientID:     common.LinuxDOClientID,
-		ClientSecret: common.LinuxDOClientSecret,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://connect.linux.do/oauth2/authorize",
-			TokenURL: "https://connect.linux.do/oauth2/token",
-		},
-		RedirectURL: common.ServerURL + "/api/oauth/linuxdo/callback",
-		Scopes:      []string{},
-	}
+	LinuxDOOAuthConfig = buildLinuxDOOAuthConfig()
 }
 
 type LinuxDOUser struct {
@@ -70,9 +64,24 @@ func GetLinuxDOUserInfo(accessToken string) (*LinuxDOUser, error) {
 	return &user, nil
 }
 
+func GetLinuxDOAuthURL(state string) (string, error) {
+	config := buildLinuxDOOAuthConfig()
+	LinuxDOOAuthConfig = config
+	if config.ClientID == "" || config.ClientSecret == "" {
+		return "", fmt.Errorf("LinuxDO OAuth not configured")
+	}
+	return config.AuthCodeURL(state), nil
+}
+
 func HandleOAuthCallback(code string, clientIP string) (string, error) {
+	config := buildLinuxDOOAuthConfig()
+	LinuxDOOAuthConfig = config
+	if config.ClientID == "" || config.ClientSecret == "" {
+		return "", fmt.Errorf("LinuxDO OAuth not configured")
+	}
+
 	ctx := context.Background()
-	token, err := LinuxDOOAuthConfig.Exchange(ctx, code)
+	token, err := config.Exchange(ctx, code)
 	if err != nil {
 		return "", fmt.Errorf("token exchange failed: %w", err)
 	}
@@ -99,6 +108,12 @@ func HandleOAuthCallback(code string, clientIP string) (string, error) {
 	// Find or create user
 	user, err := model.GetUserByLinuxDOID(ldUser.ID)
 	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", fmt.Errorf("query user failed: %w", err)
+		}
+
+		now := time.Now().Unix()
+
 		// New user
 		user = &model.User{
 			LinuxDOID:   ldUser.ID,
@@ -110,6 +125,8 @@ func HandleOAuthCallback(code string, clientIP string) (string, error) {
 			Status:      common.StatusEnabled,
 			QuotaTotal:  common.DefaultQuota,
 			TokenLimit:  common.DefaultTokenLimit,
+			LastLoginAt: &now,
+			LastLoginIP: clientIP,
 		}
 
 		// First user becomes super admin
@@ -152,6 +169,29 @@ func HandleOAuthCallback(code string, clientIP string) (string, error) {
 	}
 
 	return jwtToken, nil
+}
+
+func buildLinuxDOOAuthConfig() *oauth2.Config {
+	clientID := strings.TrimSpace(model.GetSetting("linuxdo_client_id"))
+	if clientID == "" {
+		clientID = common.LinuxDOClientID
+	}
+
+	clientSecret := strings.TrimSpace(model.GetSetting("linuxdo_client_secret"))
+	if clientSecret == "" {
+		clientSecret = common.LinuxDOClientSecret
+	}
+
+	return &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://connect.linux.do/oauth2/authorize",
+			TokenURL: "https://connect.linux.do/oauth2/token",
+		},
+		RedirectURL: common.ServerURL + "/api/oauth/linuxdo/callback",
+		Scopes:      []string{},
+	}
 }
 
 func GenerateJWT(user *model.User) (string, error) {
